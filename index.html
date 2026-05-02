@@ -365,10 +365,11 @@
     if(tokens.length === 0) return [];
 
     // ---- 1. Locate the part code ----
-    // First letter, then alphanum / dots, then one or more hyphenated segments.
-    // Allows decimal sizes like FXL5-12XL2.5L-C; rejects dates ("2026-01-20")
-    // and voltages ("12.71v") because they don't start with a letter.
-    const partRx = /^[A-Za-z][A-Za-z0-9.]*(-[A-Za-z0-9.]+)+$/;
+    // First letter, then alphanum / dots / parens / brackets, then one or more
+    // hyphenated segments. Allows decimal sizes (FXL5-12XL2.5L-C) and bracketed
+    // variants (FML5-MLDIN70(ISS)). Rejects dates ("2026-01-20") and voltages
+    // ("12.71v") because they don't start with a letter.
+    const partRx = /^[A-Za-z][A-Za-z0-9.()\[\]]*(-[A-Za-z0-9.()\[\]]+)+$/;
     let partIdx = -1, part = null;
     for(let i = 0; i < tokens.length; i++){
       const raw = tokens[i].replace(/^#/, ''); // tolerate stray leading #

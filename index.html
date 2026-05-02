@@ -268,8 +268,10 @@
       </div>
 
       <div class="footer-tip">
-        <strong>Format expected per row:</strong> <code>PART-CODE  ...metadata...  #SERIAL</code><br>
-        Part code = first token. Serial = everything after the last <code>#</code>. Lowercase scans are auto-uppercased.
+        <strong>Auto-detect parser.</strong> Finds the <strong>battery type</strong> (the hyphenated code, e.g.
+        <code>FXL5-XLTZ9</code>) and extracts every <strong>serial</strong> after it — no matter the
+        layout. Single scan, 4W A-series, or box master QR with any number of batteries all work.
+        <code>#</code>-tagged serials take priority when present.
       </div>
     </section>
 
@@ -341,35 +343,73 @@
     return `${yy}-${mm}-${dd}`;
   }
 
-  // Parse a single scan line → { part, serial } or null
+  // Parse a single scan line → array of { part, serial }
+  // Format-agnostic: works on Exide 2W (#-tagged), 4W A-series (no #),
+  // box master QR (any battery count), and any future variation that follows
+  // the same pattern: PART-CODE somewhere in the line + serials after it.
+  //
+  // Rules:
+  //   1. Part code = first token shaped like LETTER + (alphanum & hyphens),
+  //      e.g. FML5-ML40LBH, FXL5-XLTZ9, FXL0-12XL14L-A2
+  //   2. Serials come AFTER the part code:
+  //      - If any token starts with '#', those are the explicit serials
+  //      - Otherwise every "serial-shaped" token is a serial
+  //        (alphanumeric only, length ≥ 6, mixes letters AND digits)
+  //      → automatically filters out dates, voltages, counts, status words
   function parseLine(line){
     const t = line.trim();
-    if(!t) return null;
-    if(/serial\s*number/i.test(t)) return null;          // header row (anywhere on line)
+    if(!t) return [];
+    if(/serial\s*number/i.test(t)) return [];
 
     const tokens = t.split(/\s+/);
-    if(tokens.length < 1) return null;
+    if(tokens.length === 0) return [];
 
-    // part = first token, but skip if it's a pure date
-    const part = tokens[0].toUpperCase();
-    if(/^\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{2,4}$/.test(part)) return null;
-
-    // serial: prefer text after last '#' (e.g. "...#D120525135831")
-    let serial = null;
-    const hashIdx = t.lastIndexOf('#');
-    if(hashIdx >= 0){
-      const tail = t.slice(hashIdx + 1).trim();
-      const sm = tail.match(/^([A-Za-z0-9]+)/);
-      if(sm) serial = sm[1].toUpperCase();
+    // ---- 1. Locate the part code ----
+    const partRx = /^[A-Za-z][A-Za-z0-9]*(-[A-Za-z0-9]+)+$/;
+    let partIdx = -1, part = null;
+    for(let i = 0; i < tokens.length; i++){
+      const raw = tokens[i].replace(/^#/, ''); // tolerate stray leading #
+      if(partRx.test(raw)){
+        partIdx = i;
+        part = raw.toUpperCase();
+        break;
+      }
     }
-    // fallback: second whitespace token (4W batteries often lack the # marker)
-    if(!serial && tokens.length >= 2){
-      const sm = tokens[1].match(/^([A-Za-z0-9]+)/);
-      if(sm) serial = sm[1].toUpperCase();
-    }
-    if(!serial) return null;
+    if(!part) return [];
 
-    return { part, serial };
+    const after = tokens.slice(partIdx + 1);
+    if(after.length === 0) return [];
+
+    // ---- 2a. Explicit "#SERIAL" tokens (joined) take priority ----
+    const explicit = [];
+    for(const tok of after){
+      if(tok.startsWith('#')){
+        const s = tok.slice(1);
+        if(/^[A-Za-z0-9]+$/.test(s) && s.length >= 4){
+          explicit.push(s.toUpperCase());
+        }
+      }
+    }
+    const seen = new Set();
+    const out = [];
+    if(explicit.length > 0){
+      for(const s of explicit){
+        if(seen.has(s)) continue;
+        seen.add(s); out.push({ part, serial: s });
+      }
+      return out;
+    }
+
+    // ---- 2b. Serial-shaped tokens: alphanumeric, length ≥ 6, mixed letter+digit ----
+    for(const tok of after){
+      if(!/^[A-Za-z0-9]+$/.test(tok)) continue;        // dots, slashes, etc → out
+      if(tok.length < 6) continue;                      // short codes → out
+      if(!/[A-Za-z]/.test(tok) || !/\d/.test(tok)) continue;  // pure digits/letters → out
+      const s = tok.toUpperCase();
+      if(seen.has(s)) continue;
+      seen.add(s); out.push({ part, serial: s });
+    }
+    return out;
   }
 
   // ----- main parser -----
@@ -401,9 +441,9 @@
       if(/^\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{2,4}\s/.test(t) && /serial\s*number/i.test(t)) continue;
       if(/^serial\s*number\s*$/i.test(t)) continue;
 
-      const p = parseLine(t);
-      if(p){
-        parsed.push(p);
+      const items = parseLine(t);
+      if(items.length > 0){
+        for(const it of items) parsed.push(it);
       } else if(t.length > 4){
         skipped.push(t);
       }
@@ -632,9 +672,12 @@
       if(/serial\s*number/i.test(line)) continue;
       // skip pure date cell in col A (when col B is empty)
       if(!b && /^\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{2,4}$/.test(a)) continue;
-      const p = parseLine(line);
-      if(p) parsed.push(p);
-      else if(line.length > 4) skipped.push(line);
+      const items = parseLine(line);
+      if(items.length > 0){
+        for(const it of items) parsed.push(it);
+      } else if(line.length > 4) {
+        skipped.push(line);
+      }
     }
 
     // dedupe

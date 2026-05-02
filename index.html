@@ -106,7 +106,8 @@
   .btn-ghost{background:transparent;color:var(--ink)}
   .btn-ghost:hover{background:var(--ink);color:var(--paper)}
 
-  .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px}
+  .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px}
+  @media (max-width:540px){.stats{grid-template-columns:repeat(2,1fr)}}
   .stat{
     background:var(--paper);border:1.5px solid var(--line);border-radius:9px;
     padding:10px 12px;
@@ -115,6 +116,7 @@
   .stat .l{font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;margin-top:5px;font-weight:600}
   .stat.bad .n{color:var(--bad)}
   .stat.good .n{color:var(--good)}
+  .stat.warn .n{color:#B07A00}
 
   .preview{
     border:1.5px solid var(--line);border-radius:9px;overflow:hidden;
@@ -157,6 +159,13 @@
     background:#fff5f3;border:1px solid #f5d4cd;border-radius:6px;
   }
   .skipped-list div{padding:2px 0}
+  .dupes-list{
+    margin-top:10px;font-size:11.5px;font-family:'JetBrains Mono',monospace;
+    color:#8B5A00;max-height:120px;overflow-y:auto;padding:8px 12px;
+    background:#FFF8E1;border:1px solid #F0DEA8;border-radius:6px;
+  }
+  .dupes-list strong{color:#6D4500;font-family:'Manrope',sans-serif;font-size:12px}
+  .dupes-list div{padding:2px 0}
 
   /* Tabs */
   .tabs{display:flex;gap:4px;margin-bottom:10px;border-bottom:1.5px solid var(--line)}
@@ -280,6 +289,7 @@
 
       <div class="stats">
         <div class="stat good"><div class="n" id="okCount">0</div><div class="l">Parsed</div></div>
+        <div class="stat warn"><div class="n" id="dupeCount">0</div><div class="l">Duplicates</div></div>
         <div class="stat bad"><div class="n" id="badCount">0</div><div class="l">Skipped</div></div>
         <div class="stat"><div class="n" id="dateOut">—</div><div class="l">Date</div></div>
       </div>
@@ -292,6 +302,7 @@
       </div>
 
       <div id="skippedBox"></div>
+      <div id="dupesBox"></div>
     </section>
 
   </div>
@@ -310,7 +321,9 @@
   const skippedBox = $('skippedBox');
   const okCount    = $('okCount');
   const badCount   = $('badCount');
+  const dupeCount  = $('dupeCount');
   const dateOut    = $('dateOut');
+  const dupesBox   = $('dupesBox');
   const genBtn     = $('generateBtn');
   const parseBtn   = $('parseBtn');
   const clearBtn   = $('clearBtn');
@@ -401,9 +414,10 @@
   // ----- main parser -----
   let parsed = [];   // {part, serial}
   let skipped = [];  // raw lines
+  let dupes = [];    // {serial, part, count}
 
   function parseAll(){
-    parsed = []; skipped = [];
+    parsed = []; skipped = []; dupes = [];
     const text = rawInput.value;
     if(!text.trim()){
       renderPreview();
@@ -420,6 +434,7 @@
       break;
     }
 
+    const raw = [];
     for(const ln of lines){
       const t = ln.trim();
       if(!t) continue;
@@ -429,25 +444,46 @@
 
       const items = parseLine(t);
       if(items.length > 0){
-        for(const it of items) parsed.push(it);
+        for(const it of items) raw.push(it);
       } else if(t.length > 4){
         skipped.push(t);
       }
     }
 
-    // dedupe by serial
-    const seen = new Set();
-    parsed = parsed.filter(r => {
-      if(seen.has(r.serial)) return false;
-      seen.add(r.serial); return true;
-    });
+    // dedupe with tracking
+    const r = dedupeWithTracking(raw);
+    parsed = r.kept;
+    dupes = r.dupes;
 
     renderPreview();
+  }
+
+  // Dedupe by serial; report which serials appeared more than once
+  function dedupeWithTracking(rows){
+    const counts = new Map();
+    for(const r of rows){
+      counts.set(r.serial, (counts.get(r.serial) || 0) + 1);
+    }
+    const seen = new Set();
+    const kept = [];
+    for(const r of rows){
+      if(seen.has(r.serial)) continue;
+      seen.add(r.serial); kept.push(r);
+    }
+    const dupes = [];
+    for(const [serial, n] of counts){
+      if(n > 1){
+        const part = rows.find(r => r.serial === serial)?.part || '';
+        dupes.push({ serial, part, count: n });
+      }
+    }
+    return { kept, dupes };
   }
 
   function renderPreview(){
     okCount.textContent = parsed.length;
     badCount.textContent = skipped.length;
+    dupeCount.textContent = dupes.reduce((sum, d) => sum + (d.count - 1), 0);
     dateOut.textContent = dateInput.value || '—';
     genBtn.disabled = parsed.length === 0;
 
@@ -472,6 +508,17 @@
         `</div>`;
     } else {
       skippedBox.innerHTML = '';
+    }
+
+    if(dupes.length){
+      const totalDupeScans = dupes.reduce((s, d) => s + (d.count - 1), 0);
+      dupesBox.innerHTML = `<div class="dupes-list">` +
+        `<strong>${totalDupeScans} duplicate scan${totalDupeScans>1?'s':''} collapsed (same serial scanned ${dupes.length>1?'multiple times':'twice'}):</strong>` +
+        dupes.slice(0,30).map(d=>`<div>• ${escapeHtml(d.serial)} <span style="opacity:.6">(${d.part}, ×${d.count})</span></div>`).join('') +
+        (dupes.length > 30 ? `<div>… and ${dupes.length-30} more</div>` : '') +
+        `</div>`;
+    } else {
+      dupesBox.innerHTML = '';
     }
   }
 
@@ -519,7 +566,7 @@
   genBtn.addEventListener('click', generateExcel);
   clearBtn.addEventListener('click', () => {
     rawInput.value = '';
-    parsed = []; skipped = [];
+    parsed = []; skipped = []; dupes = [];
     uploadedWB = null;
     $('sheetPicker').classList.add('hidden');
     $('uploadStatus').classList.add('hidden');
@@ -632,7 +679,7 @@
     if(!ws){ return; }
     const aoa = XLSX.utils.sheet_to_json(ws, { header: 1, blankrows: false, raw: false, dateNF: 'dd/mm/yyyy' });
 
-    parsed = []; skipped = [];
+    parsed = []; skipped = []; dupes = [];
 
     // 1) Date detection — first non-empty cell in col A
     for(const row of aoa){
@@ -650,6 +697,7 @@
     }
 
     // 2) Serial extraction from col B (and fall back to col A if B is empty)
+    const raw = [];
     for(const row of aoa){
       const b = row[1] != null ? String(row[1]).trim() : '';
       const a = row[0] != null ? String(row[0]).trim() : '';
@@ -660,17 +708,18 @@
       if(!b && /^\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{2,4}$/.test(a)) continue;
       const items = parseLine(line);
       if(items.length > 0){
-        for(const it of items) parsed.push(it);
+        for(const it of items) raw.push(it);
       } else if(line.length > 4) {
         skipped.push(line);
       }
     }
 
-    // dedupe
-    const seen = new Set();
-    parsed = parsed.filter(r => seen.has(r.serial) ? false : (seen.add(r.serial), true));
+    // dedupe with tracking
+    const dr = dedupeWithTracking(raw);
+    parsed = dr.kept;
+    dupes = dr.dupes;
 
-    setStatus(`✓ Sheet "${sheetName}" — ${parsed.length} serials parsed${skipped.length ? `, ${skipped.length} skipped` : ''}`, 'ok');
+    setStatus(`✓ Sheet "${sheetName}" — ${parsed.length} unique${dupes.length ? `, ${dupes.length} duplicates collapsed` : ''}${skipped.length ? `, ${skipped.length} skipped` : ''}`, 'ok');
 
     // mirror the parsed rows back into the textarea so user can review/edit
     rawInput.value = parsed.map(r => `${r.part} ${r.serial}`).join('\n');

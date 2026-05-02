@@ -1,0 +1,648 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Exide Scan → Upload Sheet · Yantrayug</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<style>
+  :root{
+    --y:#F5C800;
+    --y-deep:#E0B600;
+    --ink:#1A1A1A;
+    --ink-2:#2B2B2B;
+    --paper:#FAFAF7;
+    --line:#E5E1D6;
+    --muted:#7A7468;
+    --good:#1F7A3A;
+    --bad:#C0392B;
+    --shadow:0 1px 0 rgba(26,26,26,.04), 0 8px 24px -12px rgba(26,26,26,.18);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    font-family:'Manrope',system-ui,sans-serif;
+    background:var(--paper);
+    color:var(--ink);
+    min-height:100vh;
+    background-image:
+      radial-gradient(circle at 1px 1px, rgba(26,26,26,.06) 1px, transparent 0);
+    background-size:22px 22px;
+  }
+  .wrap{max-width:1100px;margin:0 auto;padding:28px 22px 80px}
+  header{
+    display:flex;align-items:center;justify-content:space-between;
+    gap:16px;flex-wrap:wrap;margin-bottom:24px;
+  }
+  .brand{display:flex;align-items:center;gap:12px}
+  .logo{
+    width:42px;height:42px;border-radius:10px;
+    background:var(--y);border:2px solid var(--ink);
+    display:grid;place-items:center;font-weight:800;
+    font-family:'JetBrains Mono',monospace;font-size:20px;
+    box-shadow:3px 3px 0 var(--ink);
+  }
+  .brand h1{font-size:18px;margin:0;letter-spacing:-.01em}
+  .brand small{display:block;color:var(--muted);font-size:12px;font-weight:500;margin-top:2px}
+  .pill{
+    font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:500;
+    background:var(--ink);color:var(--paper);padding:6px 10px;border-radius:999px;
+    letter-spacing:.05em;text-transform:uppercase;
+  }
+
+  h2.section{
+    font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--muted);margin:0 0 10px;display:flex;align-items:center;gap:8px;
+  }
+  h2.section::before{
+    content:"";width:18px;height:1px;background:var(--ink);display:inline-block;
+  }
+
+  .grid{display:grid;grid-template-columns:1.1fr .9fr;gap:20px}
+  @media (max-width:860px){.grid{grid-template-columns:1fr}}
+
+  .card{
+    background:#fff;border:1.5px solid var(--ink);border-radius:14px;padding:20px;
+    box-shadow:var(--shadow);
+  }
+
+  .row{display:flex;gap:14px;flex-wrap:wrap;margin-bottom:16px}
+  label{display:block;font-size:13px;font-weight:600;margin-bottom:6px}
+  label .hint{color:var(--muted);font-weight:500;margin-left:6px;font-size:11px}
+  input[type=text],input[type=date]{
+    width:100%;padding:11px 13px;border:1.5px solid var(--line);border-radius:9px;
+    font-family:inherit;font-size:14px;font-weight:500;background:var(--paper);
+    transition:border-color .15s,box-shadow .15s;
+  }
+  input[type=text]:focus,input[type=date]:focus,textarea:focus{
+    outline:none;border-color:var(--ink);box-shadow:0 0 0 3px var(--y);
+  }
+  .col{flex:1;min-width:200px}
+
+  textarea{
+    width:100%;min-height:340px;padding:14px;border:1.5px solid var(--line);
+    border-radius:9px;font-family:'JetBrains Mono',monospace;font-size:12.5px;
+    line-height:1.55;background:var(--paper);resize:vertical;
+    transition:border-color .15s,box-shadow .15s;
+  }
+
+  .actions{display:flex;gap:10px;margin-top:14px;flex-wrap:wrap}
+  button{
+    font-family:inherit;font-weight:700;font-size:14px;padding:12px 20px;
+    border-radius:9px;border:1.5px solid var(--ink);cursor:pointer;
+    transition:transform .08s,box-shadow .12s;
+  }
+  button:active{transform:translateY(1px)}
+  .btn-primary{
+    background:var(--y);color:var(--ink);
+    box-shadow:3px 3px 0 var(--ink);
+  }
+  .btn-primary:hover{box-shadow:4px 4px 0 var(--ink);transform:translate(-1px,-1px)}
+  .btn-primary:active{box-shadow:1px 1px 0 var(--ink);transform:translate(1px,1px)}
+  .btn-primary:disabled{background:#eee;color:var(--muted);cursor:not-allowed;box-shadow:none;border-color:var(--line)}
+  .btn-ghost{background:transparent;color:var(--ink)}
+  .btn-ghost:hover{background:var(--ink);color:var(--paper)}
+
+  .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px}
+  .stat{
+    background:var(--paper);border:1.5px solid var(--line);border-radius:9px;
+    padding:10px 12px;
+  }
+  .stat .n{font-family:'JetBrains Mono',monospace;font-size:22px;font-weight:700;line-height:1}
+  .stat .l{font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;margin-top:5px;font-weight:600}
+  .stat.bad .n{color:var(--bad)}
+  .stat.good .n{color:var(--good)}
+
+  .preview{
+    border:1.5px solid var(--line);border-radius:9px;overflow:hidden;
+    max-height:380px;overflow-y:auto;background:var(--paper);
+  }
+  table{width:100%;border-collapse:collapse;font-size:12.5px}
+  thead{position:sticky;top:0;background:var(--ink);color:var(--paper);z-index:1}
+  th{
+    text-align:left;padding:9px 11px;font-size:10.5px;
+    text-transform:uppercase;letter-spacing:.1em;font-weight:700;
+  }
+  td{padding:8px 11px;border-bottom:1px solid var(--line);font-family:'JetBrains Mono',monospace}
+  tbody tr:hover{background:#fff}
+  .empty{padding:40px 20px;text-align:center;color:var(--muted);font-size:13px}
+  .empty .big{font-size:32px;margin-bottom:8px;opacity:.5}
+
+  .toast{
+    position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);
+    background:var(--ink);color:var(--paper);padding:12px 20px;border-radius:10px;
+    font-size:13px;font-weight:600;opacity:0;pointer-events:none;
+    transition:transform .25s,opacity .25s;z-index:100;
+    box-shadow:0 10px 30px -10px rgba(0,0,0,.4);
+  }
+  .toast.show{transform:translateX(-50%) translateY(0);opacity:1}
+  .toast.bad{background:var(--bad)}
+  .toast.good{background:var(--good)}
+
+  .footer-tip{
+    margin-top:18px;font-size:12px;color:var(--muted);line-height:1.6;
+    padding:12px 14px;background:#fff;border:1px dashed var(--line);border-radius:9px;
+  }
+  .footer-tip code{
+    background:var(--paper);padding:1px 6px;border-radius:4px;
+    font-family:'JetBrains Mono',monospace;font-size:11.5px;border:1px solid var(--line);
+  }
+
+  .skipped-list{
+    margin-top:10px;font-size:11.5px;font-family:'JetBrains Mono',monospace;
+    color:var(--bad);max-height:90px;overflow-y:auto;padding:8px 12px;
+    background:#fff5f3;border:1px solid #f5d4cd;border-radius:6px;
+  }
+  .skipped-list div{padding:2px 0}
+
+  /* Tabs */
+  .tabs{display:flex;gap:4px;margin-bottom:10px;border-bottom:1.5px solid var(--line)}
+  .tab{
+    background:transparent;border:none;border-bottom:2px solid transparent;
+    padding:8px 14px;font-weight:600;font-size:13px;color:var(--muted);
+    cursor:pointer;border-radius:0;margin-bottom:-1.5px;
+    transition:color .15s,border-color .15s;
+  }
+  .tab:hover{color:var(--ink)}
+  .tab.active{color:var(--ink);border-bottom-color:var(--y)}
+  .tab-panel.hidden{display:none}
+  .hidden{display:none !important}
+
+  /* Dropzone */
+  .dropzone{
+    border:2px dashed var(--line);border-radius:11px;padding:34px 20px;
+    text-align:center;cursor:pointer;background:var(--paper);
+    transition:border-color .15s,background .15s,transform .15s;
+  }
+  .dropzone:hover{border-color:var(--ink);background:#fff}
+  .dropzone.drag{border-color:var(--y-deep);background:#FFFBE8;transform:scale(1.01)}
+  .dz-icon{font-size:36px;color:var(--ink);margin-bottom:6px;font-weight:700}
+  .dz-title{font-size:14px;font-weight:600}
+  .dz-link{color:var(--ink);text-decoration:underline;text-decoration-color:var(--y);text-decoration-thickness:2px;text-underline-offset:3px}
+  .dz-sub{font-size:11.5px;color:var(--muted);margin-top:6px}
+
+  /* Sheet picker */
+  .sheet-picker{margin-top:14px}
+  .sheet-picker select{
+    width:100%;padding:11px 13px;border:1.5px solid var(--line);border-radius:9px;
+    font-family:inherit;font-size:14px;font-weight:500;background:var(--paper);cursor:pointer;
+  }
+  .sheet-picker select:focus{outline:none;border-color:var(--ink);box-shadow:0 0 0 3px var(--y)}
+
+  /* Upload status */
+  .upload-status{
+    margin-top:12px;padding:10px 14px;border-radius:8px;
+    font-size:12.5px;font-weight:500;display:flex;align-items:center;gap:8px;
+  }
+  .upload-status.ok{background:#E8F5EC;color:var(--good);border:1px solid #BCDDC5}
+  .upload-status.err{background:#FBEDEA;color:var(--bad);border:1px solid #F0CFC9}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="brand">
+      <div class="logo">Y</div>
+      <div>
+        <h1>Exide Scan → Upload Sheet</h1>
+        <small>Yantrayug Automobiles · Warranty Upload Generator</small>
+      </div>
+    </div>
+    <span class="pill">v1.0</span>
+  </header>
+
+  <div class="grid">
+
+    <section class="card">
+      <h2 class="section">Input</h2>
+
+      <div class="row">
+        <div class="col">
+          <label>Scan Date <span class="hint">Auto-detected from first line</span></label>
+          <input type="date" id="dateInput" />
+        </div>
+        <div class="col">
+          <label>Output Filename <span class="hint">.xlsx added automatically</span></label>
+          <input type="text" id="fileName" placeholder="EXIDE_UPLOAD" value="EXIDE_UPLOAD" />
+        </div>
+      </div>
+
+      <div class="tabs" role="tablist">
+        <button class="tab active" data-tab="paste" role="tab">⎘ Paste</button>
+        <button class="tab" data-tab="upload" role="tab">↥ Upload Excel</button>
+      </div>
+
+      <div class="tab-panel" id="panel-paste">
+        <label>Paste Scan Data <span class="hint">From your Google Sheet — date row + serial rows OK</span></label>
+        <textarea id="rawInput" spellcheck="false" placeholder="24/03/2026	SERIAL NUMBER
+	FML5-ML40LBH A2E5B016302 1013 2E52 A 120525 12.63V #D120525135831
+	FML5-ML40LBH A2E5B016840 1017 2E52 A 120525 12.69V #D120525134505
+	..."></textarea>
+      </div>
+
+      <div class="tab-panel hidden" id="panel-upload">
+        <label>Upload .xlsx / .xls / .csv <span class="hint">Direct from your purchase scanning sheet</span></label>
+        <div class="dropzone" id="dropzone">
+          <input type="file" id="fileUpload" accept=".xlsx,.xls,.csv" hidden />
+          <div class="dz-icon">⬆</div>
+          <div class="dz-title">Drop file here or <span class="dz-link">browse</span></div>
+          <div class="dz-sub">Reads column A for date, column B for serial scans</div>
+        </div>
+
+        <div id="sheetPicker" class="sheet-picker hidden">
+          <label>Pick Sheet <span class="hint">Multiple sheets found</span></label>
+          <select id="sheetSelect"></select>
+        </div>
+
+        <div id="uploadStatus" class="upload-status hidden"></div>
+      </div>
+
+      <div class="actions">
+        <button class="btn-primary" id="generateBtn" disabled>↓ Generate Excel</button>
+        <button class="btn-ghost" id="parseBtn">Parse Preview</button>
+        <button class="btn-ghost" id="clearBtn">Clear</button>
+      </div>
+
+      <div class="footer-tip">
+        <strong>Format expected per row:</strong> <code>PART-CODE  ...metadata...  #SERIAL</code><br>
+        Part code = first token. Serial = everything after the last <code>#</code>. Lowercase scans are auto-uppercased.
+      </div>
+    </section>
+
+    <section class="card">
+      <h2 class="section">Preview · Output Format</h2>
+
+      <div class="stats">
+        <div class="stat good"><div class="n" id="okCount">0</div><div class="l">Parsed</div></div>
+        <div class="stat bad"><div class="n" id="badCount">0</div><div class="l">Skipped</div></div>
+        <div class="stat"><div class="n" id="dateOut">—</div><div class="l">Date</div></div>
+      </div>
+
+      <div class="preview" id="previewBox">
+        <div class="empty">
+          <div class="big">⌖</div>
+          Paste data and hit <strong>Parse Preview</strong>
+        </div>
+      </div>
+
+      <div id="skippedBox"></div>
+    </section>
+
+  </div>
+
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(function(){
+  const $ = id => document.getElementById(id);
+  const dateInput  = $('dateInput');
+  const fileName   = $('fileName');
+  const rawInput   = $('rawInput');
+  const previewBox = $('previewBox');
+  const skippedBox = $('skippedBox');
+  const okCount    = $('okCount');
+  const badCount   = $('badCount');
+  const dateOut    = $('dateOut');
+  const genBtn     = $('generateBtn');
+  const parseBtn   = $('parseBtn');
+  const clearBtn   = $('clearBtn');
+  const toast      = $('toast');
+
+  // ---- default date = today -----
+  function todayISO(){
+    const d = new Date();
+    const p = n => String(n).padStart(2,'0');
+    return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}`;
+  }
+  dateInput.value = todayISO();
+
+  // ---- helpers -----
+  function showToast(msg, kind){
+    toast.textContent = msg;
+    toast.className = 'toast show' + (kind ? ' ' + kind : '');
+    setTimeout(() => toast.className = 'toast' + (kind ? ' ' + kind : ''), 2200);
+  }
+
+  // Parse "24/03/2026" or "24-03-2026" → "2026-03-24"
+  function ddmmyyyyToISO(s){
+    const m = s.match(/(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})/);
+    if(!m) return null;
+    let [_, dd, mm, yy] = m;
+    if(yy.length === 2) yy = '20' + yy;
+    dd = dd.padStart(2,'0'); mm = mm.padStart(2,'0');
+    // sanity
+    if(+dd < 1 || +dd > 31 || +mm < 1 || +mm > 12) return null;
+    return `${yy}-${mm}-${dd}`;
+  }
+
+  // Parse a single scan line → { part, serial } or null
+  function parseLine(line){
+    const t = line.trim();
+    if(!t) return null;
+    if(/^serial\s*number/i.test(t)) return null;          // header row
+    if(/^\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{2,4}/.test(t) && !t.includes('#')) return null; // pure date row
+
+    // serial = chars after last '#', alphanumeric run
+    const hashIdx = t.lastIndexOf('#');
+    if(hashIdx < 0) return null;
+    const tail = t.slice(hashIdx + 1).trim();
+    const sm = tail.match(/^([A-Za-z0-9]+)/);
+    if(!sm) return null;
+    const serial = sm[1].toUpperCase();
+
+    // part = first whitespace-separated token (must contain a hyphen — typical Exide format)
+    const head = t.slice(0, hashIdx).trim();
+    const pm = head.match(/^(\S+)/);
+    if(!pm) return null;
+    const part = pm[1].toUpperCase();
+    // skip if first token is a date
+    if(/^\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{2,4}$/.test(part)) return null;
+
+    return { part, serial };
+  }
+
+  // ----- main parser -----
+  let parsed = [];   // {part, serial}
+  let skipped = [];  // raw lines
+
+  function parseAll(){
+    parsed = []; skipped = [];
+    const text = rawInput.value;
+    if(!text.trim()){
+      renderPreview();
+      return;
+    }
+    const lines = text.split(/\r?\n/);
+
+    // Try to extract date from first non-empty line if it has DD/MM/YYYY
+    for(const ln of lines){
+      const t = ln.trim();
+      if(!t) continue;
+      const iso = ddmmyyyyToISO(t.split(/\s+/)[0]);
+      if(iso){ dateInput.value = iso; }
+      break;
+    }
+
+    for(const ln of lines){
+      const t = ln.trim();
+      if(!t) continue;
+      // Skip the pure date+header row
+      if(/^\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{2,4}\s/.test(t) && /serial\s*number/i.test(t)) continue;
+      if(/^serial\s*number\s*$/i.test(t)) continue;
+
+      const p = parseLine(t);
+      if(p){
+        parsed.push(p);
+      } else if(t.length > 4){
+        skipped.push(t);
+      }
+    }
+
+    // dedupe by serial
+    const seen = new Set();
+    parsed = parsed.filter(r => {
+      if(seen.has(r.serial)) return false;
+      seen.add(r.serial); return true;
+    });
+
+    renderPreview();
+  }
+
+  function renderPreview(){
+    okCount.textContent = parsed.length;
+    badCount.textContent = skipped.length;
+    dateOut.textContent = dateInput.value || '—';
+    genBtn.disabled = parsed.length === 0;
+
+    if(parsed.length === 0){
+      previewBox.innerHTML = `<div class="empty"><div class="big">⌖</div>No rows parsed yet</div>`;
+    } else {
+      const date = dateInput.value;
+      const rows = parsed.map((r,i) =>
+        `<tr><td>${i+1}</td><td>${r.serial}</td><td>${r.part}</td><td>YANTRAYUG AUTOMOBILES</td><td>${date}</td></tr>`
+      ).join('');
+      previewBox.innerHTML = `
+        <table>
+          <thead><tr><th>#</th><th>Col A · Serial</th><th>Col B · Part</th><th>Col C · Party</th><th>Col D · Date</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>`;
+    }
+
+    if(skipped.length){
+      skippedBox.innerHTML = `<div class="skipped-list"><strong>Skipped lines (no # serial found):</strong>` +
+        skipped.slice(0,20).map(s=>`<div>• ${escapeHtml(s)}</div>`).join('') +
+        (skipped.length > 20 ? `<div>… and ${skipped.length-20} more</div>` : '') +
+        `</div>`;
+    } else {
+      skippedBox.innerHTML = '';
+    }
+  }
+
+  function escapeHtml(s){
+    return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+
+  // ----- excel generation -----
+  function generateExcel(){
+    if(parsed.length === 0){
+      showToast('Nothing to export — parse some rows first', 'bad');
+      return;
+    }
+    const date = dateInput.value;
+    if(!date){
+      showToast('Please pick a date', 'bad');
+      return;
+    }
+
+    // AOA matching template exactly: A=serial, B=part, C=party, D=date (YYYY-MM-DD string)
+    const aoa = parsed.map(r => [r.serial, r.part, 'YANTRAYUG AUTOMOBILES', date]);
+
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+    // column widths similar to template
+    ws['!cols'] = [{ wch: 16 }, { wch: 18 }, { wch: 26 }, { wch: 12 }];
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Sheet2');
+
+    const base = (fileName.value || 'EXIDE_UPLOAD').replace(/\.xlsx$/i,'').replace(/[^A-Za-z0-9_\-]/g,'_');
+    const fname = `${base}_${date}.xlsx`;
+
+    XLSX.writeFile(wb, fname);
+    showToast(`✓ ${parsed.length} rows exported`, 'good');
+  }
+
+  // ----- events -----
+  parseBtn.addEventListener('click', parseAll);
+  rawInput.addEventListener('input', () => {
+    // light auto-parse after typing pause
+    clearTimeout(rawInput._t);
+    rawInput._t = setTimeout(parseAll, 300);
+  });
+  dateInput.addEventListener('change', renderPreview);
+  genBtn.addEventListener('click', generateExcel);
+  clearBtn.addEventListener('click', () => {
+    rawInput.value = '';
+    parsed = []; skipped = [];
+    uploadedWB = null;
+    $('sheetPicker').classList.add('hidden');
+    $('uploadStatus').classList.add('hidden');
+    $('fileUpload').value = '';
+    renderPreview();
+    rawInput.focus();
+  });
+
+  // keyboard shortcut: Ctrl/Cmd+Enter to generate
+  document.addEventListener('keydown', e => {
+    if((e.ctrlKey || e.metaKey) && e.key === 'Enter'){
+      e.preventDefault();
+      if(!genBtn.disabled) generateExcel();
+    }
+  });
+
+  // ===== Tabs =====
+  document.querySelectorAll('.tab').forEach(t => {
+    t.addEventListener('click', () => {
+      document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
+      t.classList.add('active');
+      const which = t.dataset.tab;
+      $('panel-paste').classList.toggle('hidden', which !== 'paste');
+      $('panel-upload').classList.toggle('hidden', which !== 'upload');
+    });
+  });
+
+  // ===== Upload =====
+  let uploadedWB = null;
+  const dropzone   = $('dropzone');
+  const fileUpload = $('fileUpload');
+  const sheetPicker= $('sheetPicker');
+  const sheetSelect= $('sheetSelect');
+  const uploadStatus = $('uploadStatus');
+
+  function setStatus(msg, kind){
+    uploadStatus.className = 'upload-status ' + (kind || 'ok');
+    uploadStatus.textContent = msg;
+    uploadStatus.classList.remove('hidden');
+  }
+
+  dropzone.addEventListener('click', () => fileUpload.click());
+  dropzone.addEventListener('dragover', e => {
+    e.preventDefault(); dropzone.classList.add('drag');
+  });
+  dropzone.addEventListener('dragleave', () => dropzone.classList.remove('drag'));
+  dropzone.addEventListener('drop', e => {
+    e.preventDefault(); dropzone.classList.remove('drag');
+    const f = e.dataTransfer.files[0];
+    if(f) handleFile(f);
+  });
+  fileUpload.addEventListener('change', e => {
+    const f = e.target.files[0];
+    if(f) handleFile(f);
+  });
+
+  function handleFile(file){
+    const reader = new FileReader();
+    reader.onload = ev => {
+      try {
+        const data = new Uint8Array(ev.target.result);
+        const wb = XLSX.read(data, { type: 'array', cellDates: true });
+        uploadedWB = wb;
+
+        // populate sheet picker
+        sheetSelect.innerHTML = '';
+        wb.SheetNames.forEach(name => {
+          const opt = document.createElement('option');
+          opt.value = name; opt.textContent = name;
+          sheetSelect.appendChild(opt);
+        });
+
+        // pick the most-likely sheet: largest by row count, or active sheet
+        const best = pickBestSheet(wb);
+        sheetSelect.value = best;
+        sheetPicker.classList.toggle('hidden', wb.SheetNames.length <= 1);
+
+        setStatus(`✓ Loaded ${file.name} — ${wb.SheetNames.length} sheet(s)`, 'ok');
+        loadFromSheet(best);
+      } catch(err){
+        console.error(err);
+        setStatus(`✗ Couldn't read file: ${err.message}`, 'err');
+      }
+    };
+    reader.onerror = () => setStatus('✗ File read failed', 'err');
+    reader.readAsArrayBuffer(file);
+  }
+
+  function pickBestSheet(wb){
+    // Prefer the sheet with the most rows that has a '#' in column B somewhere.
+    let best = wb.SheetNames[0], bestScore = -1;
+    for(const name of wb.SheetNames){
+      const ws = wb.Sheets[name];
+      const aoa = XLSX.utils.sheet_to_json(ws, { header: 1, blankrows: false });
+      let hashRows = 0;
+      for(const row of aoa){
+        const b = (row[1] != null) ? String(row[1]) : '';
+        if(b.includes('#')) hashRows++;
+      }
+      if(hashRows > bestScore){ bestScore = hashRows; best = name; }
+    }
+    return best;
+  }
+
+  sheetSelect.addEventListener('change', () => loadFromSheet(sheetSelect.value));
+
+  function loadFromSheet(sheetName){
+    if(!uploadedWB) return;
+    const ws = uploadedWB.Sheets[sheetName];
+    if(!ws){ return; }
+    const aoa = XLSX.utils.sheet_to_json(ws, { header: 1, blankrows: false, raw: false, dateNF: 'dd/mm/yyyy' });
+
+    parsed = []; skipped = [];
+
+    // 1) Date detection — first non-empty cell in col A
+    for(const row of aoa){
+      const v = row[0];
+      if(v == null || v === '') continue;
+      let iso = null;
+      if(v instanceof Date){
+        const p = n => String(n).padStart(2,'0');
+        iso = `${v.getFullYear()}-${p(v.getMonth()+1)}-${p(v.getDate())}`;
+      } else {
+        iso = ddmmyyyyToISO(String(v).trim());
+      }
+      if(iso){ dateInput.value = iso; }
+      break;
+    }
+
+    // 2) Serial extraction from col B (and fall back to col A if B is empty)
+    for(const row of aoa){
+      const b = row[1] != null ? String(row[1]).trim() : '';
+      const a = row[0] != null ? String(row[0]).trim() : '';
+      const line = b || (a.includes('#') ? a : '');
+      if(!line) continue;
+      if(/^serial\s*number/i.test(line)) continue;
+      const p = parseLine(line);
+      if(p) parsed.push(p);
+      else if(line.length > 4 && line.includes('#')) skipped.push(line);
+    }
+
+    // dedupe
+    const seen = new Set();
+    parsed = parsed.filter(r => seen.has(r.serial) ? false : (seen.add(r.serial), true));
+
+    setStatus(`✓ Sheet "${sheetName}" — ${parsed.length} serials parsed${skipped.length ? `, ${skipped.length} skipped` : ''}`, 'ok');
+
+    // mirror the parsed rows back into the textarea so user can review/edit
+    rawInput.value = parsed.map(r => `${r.part} #${r.serial}`).join('\n');
+
+    renderPreview();
+  }
+
+})();
+</script>
+</body>
+</html>

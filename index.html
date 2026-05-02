@@ -269,9 +269,9 @@
 
       <div class="footer-tip">
         <strong>Auto-detect parser.</strong> Finds the <strong>battery type</strong> (the hyphenated code, e.g.
-        <code>FXL5-XLTZ9</code>) and extracts every <strong>serial</strong> after it — no matter the
-        layout. Single scan, 4W A-series, or box master QR with any number of batteries all work.
-        <code>#</code>-tagged serials take priority when present.
+        <code>FXL5-XLTZ9</code>) and extracts every <strong>battery serial</strong> after it.
+        <code>#</code>-tagged tokens (batch codes, box master QRs) are ignored — only the actual
+        battery scans get exported.
       </div>
     </section>
 
@@ -344,18 +344,18 @@
   }
 
   // Parse a single scan line → array of { part, serial }
-  // Format-agnostic: works on Exide 2W (#-tagged), 4W A-series (no #),
-  // box master QR (any battery count), and any future variation that follows
-  // the same pattern: PART-CODE somewhere in the line + serials after it.
+  // Format-agnostic: works on Exide 2W, 4W A-series, and box master QR scans.
   //
   // Rules:
-  //   1. Part code = first token shaped like LETTER + (alphanum & hyphens),
-  //      e.g. FML5-ML40LBH, FXL5-XLTZ9, FXL0-12XL14L-A2
-  //   2. Serials come AFTER the part code:
-  //      - If any token starts with '#', those are the explicit serials
-  //      - Otherwise every "serial-shaped" token is a serial
-  //        (alphanumeric only, length ≥ 6, mixes letters AND digits)
-  //      → automatically filters out dates, voltages, counts, status words
+  //   1. Part code = first token shaped like LETTER + (alphanum & dots & hyphens),
+  //      e.g. FML5-ML40LBH, FXL5-XLTZ9, FXL5-12XL2.5L-C
+  //   2. Serials = every "serial-shaped" token AFTER the part code:
+  //      - alphanumeric only (no #, no dots, no hyphens)
+  //      - length ≥ 6
+  //      - mixes letters AND digits
+  //      → automatically excludes batch codes (#D120525135831), box QRs
+  //        (#b601rc3100800), counts (5, 10), status words (charged), voltages
+  //        (12.63V), short codes (2E52), dates, and single letters.
   function parseLine(line){
     const t = line.trim();
     if(!t) return [];
@@ -366,7 +366,7 @@
 
     // ---- 1. Locate the part code ----
     // First letter, then alphanum / dots, then one or more hyphenated segments.
-    // Allows decimal sizes like FXL5-12XL2.5L-C; still rejects dates ("2026-...")
+    // Allows decimal sizes like FXL5-12XL2.5L-C; rejects dates ("2026-01-20")
     // and voltages ("12.71v") because they don't start with a letter.
     const partRx = /^[A-Za-z][A-Za-z0-9.]*(-[A-Za-z0-9.]+)+$/;
     let partIdx = -1, part = null;
@@ -383,29 +383,11 @@
     const after = tokens.slice(partIdx + 1);
     if(after.length === 0) return [];
 
-    // ---- 2a. Explicit "#SERIAL" tokens (joined) take priority ----
-    const explicit = [];
-    for(const tok of after){
-      if(tok.startsWith('#')){
-        const s = tok.slice(1);
-        if(/^[A-Za-z0-9]+$/.test(s) && s.length >= 4){
-          explicit.push(s.toUpperCase());
-        }
-      }
-    }
+    // ---- 2. Collect serial-shaped tokens ----
     const seen = new Set();
     const out = [];
-    if(explicit.length > 0){
-      for(const s of explicit){
-        if(seen.has(s)) continue;
-        seen.add(s); out.push({ part, serial: s });
-      }
-      return out;
-    }
-
-    // ---- 2b. Serial-shaped tokens: alphanumeric, length ≥ 6, mixed letter+digit ----
     for(const tok of after){
-      if(!/^[A-Za-z0-9]+$/.test(tok)) continue;        // dots, slashes, etc → out
+      if(!/^[A-Za-z0-9]+$/.test(tok)) continue;        // dots, slashes, # → out
       if(tok.length < 6) continue;                      // short codes → out
       if(!/[A-Za-z]/.test(tok) || !/\d/.test(tok)) continue;  // pure digits/letters → out
       const s = tok.toUpperCase();
@@ -690,7 +672,7 @@
     setStatus(`✓ Sheet "${sheetName}" — ${parsed.length} serials parsed${skipped.length ? `, ${skipped.length} skipped` : ''}`, 'ok');
 
     // mirror the parsed rows back into the textarea so user can review/edit
-    rawInput.value = parsed.map(r => `${r.part} #${r.serial}`).join('\n');
+    rawInput.value = parsed.map(r => `${r.part} ${r.serial}`).join('\n');
 
     renderPreview();
   }

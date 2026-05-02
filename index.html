@@ -345,24 +345,29 @@
   function parseLine(line){
     const t = line.trim();
     if(!t) return null;
-    if(/^serial\s*number/i.test(t)) return null;          // header row
-    if(/^\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{2,4}/.test(t) && !t.includes('#')) return null; // pure date row
+    if(/serial\s*number/i.test(t)) return null;          // header row (anywhere on line)
 
-    // serial = chars after last '#', alphanumeric run
-    const hashIdx = t.lastIndexOf('#');
-    if(hashIdx < 0) return null;
-    const tail = t.slice(hashIdx + 1).trim();
-    const sm = tail.match(/^([A-Za-z0-9]+)/);
-    if(!sm) return null;
-    const serial = sm[1].toUpperCase();
+    const tokens = t.split(/\s+/);
+    if(tokens.length < 1) return null;
 
-    // part = first whitespace-separated token (must contain a hyphen — typical Exide format)
-    const head = t.slice(0, hashIdx).trim();
-    const pm = head.match(/^(\S+)/);
-    if(!pm) return null;
-    const part = pm[1].toUpperCase();
-    // skip if first token is a date
+    // part = first token, but skip if it's a pure date
+    const part = tokens[0].toUpperCase();
     if(/^\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{2,4}$/.test(part)) return null;
+
+    // serial: prefer text after last '#' (e.g. "...#D120525135831")
+    let serial = null;
+    const hashIdx = t.lastIndexOf('#');
+    if(hashIdx >= 0){
+      const tail = t.slice(hashIdx + 1).trim();
+      const sm = tail.match(/^([A-Za-z0-9]+)/);
+      if(sm) serial = sm[1].toUpperCase();
+    }
+    // fallback: second whitespace token (4W batteries often lack the # marker)
+    if(!serial && tokens.length >= 2){
+      const sm = tokens[1].match(/^([A-Za-z0-9]+)/);
+      if(sm) serial = sm[1].toUpperCase();
+    }
+    if(!serial) return null;
 
     return { part, serial };
   }
@@ -435,7 +440,7 @@
     }
 
     if(skipped.length){
-      skippedBox.innerHTML = `<div class="skipped-list"><strong>Skipped lines (no # serial found):</strong>` +
+      skippedBox.innerHTML = `<div class="skipped-list"><strong>Skipped lines:</strong>` +
         skipped.slice(0,20).map(s=>`<div>• ${escapeHtml(s)}</div>`).join('') +
         (skipped.length > 20 ? `<div>… and ${skipped.length-20} more</div>` : '') +
         `</div>`;
@@ -622,12 +627,14 @@
     for(const row of aoa){
       const b = row[1] != null ? String(row[1]).trim() : '';
       const a = row[0] != null ? String(row[0]).trim() : '';
-      const line = b || (a.includes('#') ? a : '');
+      const line = b || a;
       if(!line) continue;
-      if(/^serial\s*number/i.test(line)) continue;
+      if(/serial\s*number/i.test(line)) continue;
+      // skip pure date cell in col A (when col B is empty)
+      if(!b && /^\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{2,4}$/.test(a)) continue;
       const p = parseLine(line);
       if(p) parsed.push(p);
-      else if(line.length > 4 && line.includes('#')) skipped.push(line);
+      else if(line.length > 4) skipped.push(line);
     }
 
     // dedupe
